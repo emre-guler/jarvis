@@ -82,12 +82,12 @@ class SystemControls:
                 # Get power source
                 power_cmd = "pmset -g ps"
                 power_result = self.execute_command(power_cmd)
-                power_source = "Şarj ediliyor" if "AC Power" in power_result else "Pil gücü kullanılıyor"
+                power_source = "Charging" if "AC Power" in power_result else "On battery power"
                 
                 # Get battery percentage
                 percent_cmd = "pmset -g batt | grep -Eo '\\d+%'"
                 percent_result = self.execute_command(percent_cmd)
-                percentage = percent_result.strip() if percent_result else "Bilinmiyor"
+                percentage = percent_result.strip() if percent_result else "Unknown"
                 
                 # Get time remaining
                 time_cmd = "pmset -g batt | grep -Eo '\\d+:\\d+ remaining'"
@@ -100,10 +100,10 @@ class SystemControls:
                     if time_parts and time_parts.strip().isdigit():
                         hours = int(time_parts)
                         if hours > 0:
-                            status += f", yaklaşık {hours} saat kaldı"
+                            status += f", approximately {hours} hours remaining"
                 
                 return status
                 
             except Exception as e:
-                print(f"Pil durumu ayrıştırılırken hata: {e}")
-                return "Pil durumu alınamadı" 
+                print(f"Error getting battery status: {e}")
+                return "Could not get battery status" 

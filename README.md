@@ -1,47 +1,47 @@
-# Jarvis - Kişisel Sesli Asistan
+# Jarvis - Personal Voice Assistant
 
-Bu proje, Iron Man filmindeki Jarvis'ten esinlenerek geliştirilmiş kişisel bir sesli asistan uygulamasıdır. MacOS üzerinde çalışacak şekilde tasarlanmıştır.
+> **Note**: This project is a personal voice assistant inspired by Jarvis from the Iron Man movies. It is designed to work on MacOS.
 
-## Özellikler
+## Features
 
-- Sürekli ses dinleme ve konuşmacı tanıma
-- Özelleştirilmiş ses ile yanıt verme
-- Sistem kontrolü (parlaklık, ses, uygulamalar vb.)
-- Konuşma geçmişi
-- Konuşmacı doğrulama
+- Continuous voice listening and speaker recognition
+- Customized voice responses
+- System control (brightness, volume, applications, etc.)
+- Conversation history
+- Speaker verification
 
-## Gereksinimler
+## Requirements
 
 - Python 3.8+
 - PyAudio
 - OpenAI Whisper
 - TTS (Text-to-Speech)
-- Diğer gereksinimler requirements.txt dosyasında listelenmiştir
+- Other requirements are listed in requirements.txt
 
-## Kurulum
+## Installation
 
-1. Gerekli paketleri yükleyin:
+1. Install required packages:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Ses profilinizi oluşturun:
-- Jarvis'i ilk kez çalıştırdığınızda, sesinizi tanıması için bir profil oluşturmanız gerekecektir.
-- Birkaç saniye boyunca konuşmanız istenecektir.
+2. Create your voice profile:
+- When you first run Jarvis, you'll need to create a profile for voice recognition
+- You'll be asked to speak for a few seconds
 
-## Kullanım
+## Usage
 
-Asistanı başlatmak için:
+To start the assistant:
 ```bash
 python jarvis.py
 ```
 
-## Güvenlik
+## Security
 
-- Sistem komutları için sudo yetkisi gerekebilir
-- Ses profili verileriniz lokalde saklanır
-- Tüm işlemler yerel olarak gerçekleştirilir
+- System commands may require sudo privileges
+- Voice profile data is stored locally
+- All processing is done locally
 
-## Lisans
+## License
 
 MIT
