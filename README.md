@@ -1,6 +1,6 @@
 # Jarvis - Personal Voice Assistant
 
-> **Note**: This project is a personal voice assistant inspired by Jarvis from the Iron Man movies. It is designed to work on MacOS.
+> **Note**: This project was generated with the assistance of AI (Claude 3.5 Sonnet) to create a personal voice assistant inspired by Jarvis from the Iron Man movies.
 
 ## Features
 
