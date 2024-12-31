@@ -41,7 +41,3 @@ python jarvis.py
 - System commands may require sudo privileges
 - Voice profile data is stored locally
 - All processing is done locally
-
-## License
-
-MIT
