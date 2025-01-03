@@ -1,0 +1,96 @@
+{
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.formatting.provider": "black",
+    "python.analysis.typeCheckingMode": "basic",
+    "editor.formatOnSave": true,
+    "editor.rulers": [88],
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/*.pyc": true,
+        ".coverage": true,
+        "htmlcov": true,
+        "dist": true,
+        "build": true,
+        "*.egg-info": true,
+        ".venv": true,
+        "env": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/*.code-search": true,
+        ".venv": true,
+        "env": true
+    },
+    "project.structure": {
+        "src": {
+            "voice": {
+                "recognition": ["speaker_recognition.py", "wake_word.py"],
+                "synthesis": ["voice_cloning.py", "tts.py"]
+            },
+            "ai": {
+                "llm": ["gpt_integration.py", "knowledge_base.py"],
+                "context": ["conversation_memory.py", "user_preferences.py"]
+            },
+            "system": {
+                "control": ["computer_control.py", "app_control.py"],
+                "integration": ["file_manager.py", "settings_manager.py"]
+            },
+            "services": {
+                "weather": ["weather_service.py"],
+                "calendar": ["calendar_service.py"],
+                "news": ["news_service.py"]
+            },
+            "security": {
+                "auth": ["voice_auth.py", "encryption.py"],
+                "api": ["key_management.py"]
+            },
+            "utils": ["audio_processing.py", "system_utils.py"]
+        },
+        "tests": {
+            "unit": {},
+            "integration": {},
+            "performance": {}
+        },
+        "config": ["settings.py", "constants.py"],
+        "docs": ["README.md", "API.md"],
+        "scripts": ["setup.py", "run.py"]
+    },
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.linting.pylintArgs": [
+        "--max-line-length=88",
+        "--disable=C0111",
+        "--disable=C0103"
+    ],
+    "python.formatting.blackArgs": [
+        "--line-length=88"
+    ],
+    "python.analysis.extraPaths": [
+        "./src"
+    ],
+    "requirements": {
+        "python": ">=3.9",
+        "dependencies": {
+            "pyaudio": ">=0.2.11",
+            "librosa": ">=0.9.0",
+            "torch": ">=1.9.0",
+            "tensorflow": ">=2.6.0",
+            "openai-whisper": ">=1.0",
+            "coqui-tts": ">=0.6.0",
+            "fastapi": ">=0.68.0",
+            "psutil": ">=5.8.0",
+            "pyautogui": ">=0.9.53",
+            "numpy": ">=1.21.0",
+            "pandas": ">=1.3.0",
+            "python-dotenv": ">=0.19.0",
+            "pydantic": ">=1.8.2",
+            "pytest": ">=6.2.5",
+            "black": ">=21.9b0",
+            "pylint": ">=2.11.1"
+        }
+    }
+}
