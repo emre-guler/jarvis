@@ -80,3 +80,5 @@ training_checkpoints/
 *.bak
 *.swp
 *~ 
+
+.DS_Store

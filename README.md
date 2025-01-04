@@ -9,6 +9,8 @@ A sophisticated AI-powered personal assistant inspired by Iron Man's JARVIS, fea
 ### Voice Interaction
 - Wake word detection with "Jarvis"
   - CNN-based model with MFCC features
+  - Automatic audio segmentation for training
+  - Intelligent speech detection
   - < 500ms detection latency
   - < 5% CPU usage in standby
   - > 98% accuracy target
@@ -84,10 +86,17 @@ cp .env.example .env
 # Edit .env with your API keys and configurations
 ```
 
-5. Train the wake word model (see detailed guide in `docs/wake-word-training.md`):
+5. Train the wake word model:
 ```bash
-# Collect training data
+# Method 1: Auto-Segmentation (Recommended)
+python src/voice/training/auto_segment.py
+# Follow the prompts to record continuous audio samples
+
+# Method 2: Manual Recording
 python src/voice/training/data_collector.py
+# Press 'p' for positive samples (saying "Jarvis")
+# Press 'n' for negative samples (other sounds)
+# Press 'q' to quit
 
 # Train the model
 python src/voice/training/train_model.py
