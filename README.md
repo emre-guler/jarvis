@@ -75,12 +75,36 @@ cp .env.example .env
 # Edit .env with your API keys and configurations
 ```
 
-5. Run initial setup:
+5. Train the wake word model:
+```bash
+# Step 1: Collect training data
+python src/voice/training/data_collector.py
+# Use these keys during collection:
+# 'p' - Record a positive sample (saying "Jarvis")
+# 'n' - Record a negative sample (other words/noise)
+# 'q' - Quit recording
+
+# Recommended samples:
+# - At least 100 positive samples of "Jarvis"
+# - At least 200 negative samples
+# Tips for good training data:
+# - Record in different voice tones
+# - Record from different distances
+# - Include background noise
+# - Include similar-sounding words
+# - Record with different people if possible
+
+# Step 2: Train the model
+python src/voice/training/train_model.py
+# This will create a model file in the models/ directory
+```
+
+6. Run initial setup:
 ```bash
 python scripts/setup.py
 ```
 
-6. Start Jarvis:
+7. Start Jarvis:
 ```bash
 python scripts/run.py
 ```
@@ -90,6 +114,11 @@ python scripts/run.py
 ### Core Components
 1. **Voice Processing**
    - Wake word detection
+     - CNN-based model for "Jarvis" detection
+     - MFCC feature extraction
+     - Real-time audio processing
+     - Custom model training support
+     - ~500ms detection latency
    - Speaker recognition
    - Voice synthesis
 
@@ -147,6 +176,7 @@ python scripts/performance_test.py
 - [Feature Specifications](FEATURES.md)
 - [API Documentation](docs/API.md)
 - [RFCs](rfcs/)
+- [Wake Word Training Guide](docs/wake-word-training.md)
 
 ## 🤝 Contributing
 
