@@ -64,13 +64,38 @@ The wake word detection system is the first point of interaction between the use
 3. Deploy initial wake word model
 4. Basic integration testing
 
-#### Phase 2: Optimization
+#### Phase 2: Data Collection and Processing
+1. **Auto-Segmentation System**
+   - Automatic word boundary detection
+   - Clean segmentation of long audio recordings
+   - Intelligent silence detection
+   - Configurable parameters:
+     - Minimum word length (300ms)
+     - Maximum word length (1.2s)
+     - Pre/post padding (100ms)
+     - Silence threshold (-45dB)
+   - Quality assurance:
+     - Centered word alignment
+     - Clean word boundaries
+     - Consistent sample length
+
+2. **Training Data Preparation**
+   - Positive samples:
+     - Multiple "Jarvis" utterances
+     - Various tones and speeds
+     - Different environmental conditions
+   - Negative samples:
+     - Similar-sounding words
+     - Common background noises
+     - Typical user commands
+
+#### Phase 3: Optimization
 1. Performance tuning
 2. Power optimization
 3. False positive reduction
 4. Model refinement
 
-#### Phase 3: Integration
+#### Phase 4: Integration
 1. System integration
 2. Background service setup
 3. Error handling
@@ -81,6 +106,7 @@ The wake word detection system is the first point of interaction between the use
 - librosa for audio processing
 - TensorFlow Lite for model inference
 - numpy for numerical operations
+- soundfile for audio file handling
 
 ## Security Considerations
 - Audio data privacy
@@ -99,15 +125,19 @@ The wake word detection system is the first point of interaction between the use
 - System resource usage within limits
 - User satisfaction with response time
 - Battery impact < 2% in standby
+- Clean word segmentation > 95% accuracy
 
 ## Timeline
 - Phase 1: 2 weeks
 - Phase 2: 1 week
 - Phase 3: 1 week
+- Phase 4: 1 week
 - Testing: 1 week
 
 ## Future Considerations
 - Multiple wake word support
 - Custom wake word training
 - Multilingual support
-- Dynamic sensitivity adjustment 
+- Dynamic sensitivity adjustment
+- Advanced noise filtering
+- Improved segmentation algorithms 

@@ -1,130 +1,148 @@
-# Wake Word Detection Training Guide
-
-This document provides detailed instructions for training and optimizing the wake word detection model for Jarvis.
+# Wake Word Training Guide
 
 ## Overview
+This guide explains how to prepare and process training data for the wake word detection system, including the use of the auto-segmentation feature for processing long audio recordings.
 
-The wake word detection system uses a Convolutional Neural Network (CNN) trained on Mel-frequency cepstral coefficients (MFCC) features extracted from audio samples. The model is designed to detect the wake word "Jarvis" with high accuracy while minimizing false positives and computational overhead.
+## Prerequisites
+- Python 3.9 or higher
+- Required packages installed (see requirements.txt)
+- Microphone for recording
+- Quiet environment for recording
 
-## Training Data Collection
+## Recording Guidelines
 
-There are two methods to collect training data:
+### Positive Samples (Wake Word "Jarvis")
+1. Record in your typical usage environment
+2. Speak clearly with ~1 second pause between each "Jarvis"
+3. Vary your:
+   - Speaking speed
+   - Tone
+   - Volume
+   - Distance from microphone
+4. Include some background noise variations
+5. Aim for at least 100 samples
 
-### Method 1: Auto-Segmentation (Recommended)
-This method allows you to record continuous audio files that are automatically segmented into training samples.
+### Negative Samples (Non-Wake Words)
+1. Include similar-sounding words
+2. Record common background noises
+3. Include typical commands and phrases
+4. Vary environmental conditions
+5. Aim for at least 200 samples
 
-1. **Record Positive Samples**:
+## Auto-Segmentation Feature
+
+### Overview
+The auto-segmentation feature automatically processes long audio recordings into individual word samples, making it easy to create a large dataset of training samples.
+
+### Key Features
+- Automatic word boundary detection
+- Clean word isolation
+- Consistent sample length
+- Intelligent silence detection
+- Quality assurance checks
+
+### Parameters
+- Minimum word length: 300ms
+- Maximum word length: 1.2s
+- Pre/post padding: 100ms each
+- Silence threshold: -45dB
+- Sample rate: 16kHz
+- Channels: Mono
+
+### Usage
+
+1. **Recording Long Audio Files**
+   ```bash
+   # Record positive samples (multiple "Jarvis" utterances)
+   rec data/audio/wake_word/jarvis_samples.wav
+   
+   # Record negative samples (other words/phrases)
+   rec data/audio/wake_word/negative_samples.wav
+   ```
+
+2. **Running Auto-Segmentation**
    ```bash
    python src/voice/training/auto_segment.py
    ```
-   - Record a 2-3 minute audio file saying "Jarvis" multiple times
-   - Leave 1-2 seconds gap between each utterance
-   - Include variations in:
-     - Volume (normal, loud, quiet)
-     - Speed (normal, fast, slow)
-     - Tone (formal, casual)
-     - Distance from microphone
-     - Accent and pronunciation
+   - Follow the prompts to process your audio files
+   - The script will automatically:
+     1. Detect word boundaries
+     2. Extract clean samples
+     3. Save to appropriate directories
+     4. Show progress and statistics
 
-2. **Record Negative Samples**:
-   - Record another 2-3 minute audio file containing:
-     - Similar-sounding words ("Service", "Jarred", etc.)
-     - Normal conversations
-     - Background noise
-     - Environmental sounds
+3. **Verifying Samples**
+   - Check the output directories:
+     - `data/audio/wake_word/positive/`
+     - `data/audio/wake_word/negative/`
+   - Listen to a few samples to ensure quality
+   - Verify clean word boundaries
+   - Check sample counts
 
-The auto-segmenter will:
-- Detect speech segments automatically
-- Extract and normalize audio samples
-- Save them in the appropriate directories
-
-### Method 2: Manual Recording (Legacy)
-```bash
-python src/voice/training/data_collector.py
-```
-- Press 'p' to record positive samples
-- Press 'n' to record negative samples
-- Press 'q' to quit
+### Tips for Better Results
+1. Record in a relatively quiet environment
+2. Leave clear pauses between words
+3. Maintain consistent volume
+4. Vary your speaking style naturally
+5. Include some background noise
+6. Monitor the segmentation output
+7. Verify sample quality regularly
 
 ## Training Process
 
-1. **Prepare Environment**:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+1. **Prepare Training Data**
+   - Use auto-segmentation for long recordings
+   - Manually record individual samples if preferred
+   - Verify sample quality and counts
 
-2. **Train Model**:
+2. **Train the Model**
    ```bash
    python src/voice/training/train_model.py
    ```
 
-3. **Test Model**:
+3. **Test the Model**
    ```bash
    python src/voice/training/test_model.py
    ```
-   - Say "Jarvis" to test detection
-   - Press 'y' if detection was correct
-   - Press 'n' if detection was incorrect
-
-## Best Practices
-
-### Recording Guidelines
-1. **Positive Samples**:
-   - Minimum 100 samples
-   - Mix different speaking styles
-   - Include various environments
-   - Vary distance from microphone
-   - Use different intonations
-
-2. **Negative Samples**:
-   - Minimum 200 samples
-   - Include similar-sounding words
-   - Record ambient noise
-   - Add background conversations
-   - Mix in music/media playback
-
-### Training Tips
-- Balance positive and negative samples
-- Use diverse recording environments
-- Include challenging scenarios
-- Monitor validation accuracy
-- Test in real conditions
-
-## Performance Metrics
-
-Target metrics for the wake word system:
-- Detection latency < 500ms
-- False positive rate < 1%
-- False negative rate < 0.5%
-- CPU usage < 5% in standby
-- Accuracy > 98%
 
 ## Troubleshooting
 
-1. **Poor Detection Rate**:
-   - Add more training samples
-   - Include more variations
-   - Adjust model parameters
-   - Check audio quality
+### Common Issues
+1. **Poor Segmentation**
+   - Ensure clear pauses between words
+   - Adjust silence threshold if needed
+   - Check recording volume levels
 
-2. **High False Positives**:
-   - Add more negative samples
-   - Include similar words
-   - Tune detection threshold
-   - Verify audio normalization
+2. **Missing Words**
+   - Words might be too short/long
+   - Adjust length parameters
+   - Check silence threshold
 
-3. **System Performance**:
-   - Monitor CPU usage
-   - Check audio buffer size
-   - Verify sample rate
-   - Optimize model size
+3. **Extra Segments**
+   - Background noise too high
+   - Silence threshold too low
+   - Insufficient pauses between words
 
-## Maintenance
+### Parameter Adjustment
+If needed, adjust these parameters in `auto_segment.py`:
+```python
+self.min_silence_len = 0.2     # minimum silence between words
+self.silence_thresh = -45      # silence threshold in dB
+self.min_word_length = 0.3     # minimum word length
+self.max_word_length = 1.2     # maximum word length
+```
 
-Regular updates to the training data are recommended:
-- Add new variations
-- Include failed detections
-- Update with user feedback
-- Retrain periodically 
+## Best Practices
+1. Start with default parameters
+2. Monitor segmentation results
+3. Adjust parameters if needed
+4. Verify sample quality
+5. Maintain consistent recording conditions
+6. Back up your original recordings
+7. Document any parameter changes
+
+## Next Steps
+1. Train your wake word model
+2. Test in various conditions
+3. Fine-tune as needed
+4. Deploy for real-world use 

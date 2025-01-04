@@ -7,6 +7,27 @@
 - Always-on background listening
 - Low latency detection (< 500ms)
 - Power-efficient continuous monitoring
+- Auto-segmentation capabilities:
+  - Automatic word boundary detection
+  - Long audio file processing
+  - Clean word isolation
+  - Configurable parameters
+  - Batch processing support
+
+### Training Data Management
+- Automatic audio segmentation
+- Intelligent silence detection
+- Clean word boundary extraction
+- Training data preparation:
+  - Positive sample processing
+  - Negative sample processing
+  - Quality assurance checks
+  - Batch processing support
+- Sample organization:
+  - Automatic file naming
+  - Directory management
+  - Sample verification tools
+  - Dataset statistics
 
 ### Speaker Recognition
 - Biometric voice authentication
