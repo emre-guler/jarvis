@@ -1,163 +1,222 @@
-import os
+"""
+Train the Wake Word Detection Model
+"""
 import logging
 from pathlib import Path
-from typing import Tuple, List
 
 import numpy as np
 import tensorflow as tf
 from python_speech_features import mfcc
-import librosa
-from sklearn.model_selection import train_test_split
+import wave
+
+from config.settings import AUDIO_SETTINGS, WAKE_WORD_CONFIG
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-class WakeWordModelTrainer:
-    def __init__(self, data_dir: str = "data/wake_word_samples", model_dir: str = "models"):
-        """Initialize the model trainer
+def load_audio_file(file_path: Path) -> np.ndarray:
+    """Load and preprocess audio file"""
+    with wave.open(str(file_path), 'rb') as wf:
+        # Read audio data
+        audio_data = wf.readframes(wf.getnframes())
+        audio_np = np.frombuffer(audio_data, dtype=np.int16)
         
-        Args:
-            data_dir: Directory containing positive and negative samples
-            model_dir: Directory to save the trained model
-        """
-        self.data_dir = Path(data_dir)
-        self.model_dir = Path(model_dir)
-        self.model_dir.mkdir(parents=True, exist_ok=True)
+        # Normalize to [-1, 1]
+        audio_np = audio_np.astype(np.float32) / 32768.0
         
-        # Audio processing settings
-        self.sample_rate = 16000
-        self.n_mfcc = 13
-        self.n_mel = 40
-        self.window_size = 0.025
-        self.hop_size = 0.01
+        return audio_np
+
+def extract_features(audio_data: np.ndarray, sample_rate: int) -> np.ndarray:
+    """Extract MFCC features from audio data"""
+    features = mfcc(
+        audio_data,
+        samplerate=sample_rate,
+        numcep=13,
+        nfilt=40,
+        nfft=2048,
+        winlen=0.025,
+        winstep=0.01,
+        preemph=0.97,
+        appendEnergy=True
+    )
+    
+    # Normalize features
+    features = (features - np.mean(features)) / (np.std(features) + 1e-10)
+    
+    return features
+
+def create_model(input_shape):
+    """Create the CNN model"""
+    model = tf.keras.Sequential([
+        # Input layer
+        tf.keras.layers.Input(shape=input_shape),
         
-    def prepare_data(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Prepare training data from audio samples"""
-        logger.info("Preparing training data...")
+        # First convolutional block
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.25),
         
-        X = []  # Features
-        y = []  # Labels
+        # Second convolutional block
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.25),
         
-        # Process positive samples
-        positive_dir = self.data_dir / "positive"
-        for audio_file in positive_dir.glob("*.wav"):
-            features = self._extract_features(audio_file)
-            if features is not None:
-                X.append(features)
-                y.append(1)
-                
-        # Process negative samples
-        negative_dir = self.data_dir / "negative"
-        for audio_file in negative_dir.glob("*.wav"):
-            features = self._extract_features(audio_file)
-            if features is not None:
-                X.append(features)
-                y.append(0)
-                
-        X = np.array(X)
-        y = np.array(y)
+        # Third convolutional block
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.4),
         
-        logger.info(f"Prepared {len(y)} samples ({sum(y)} positive, {len(y)-sum(y)} negative)")
-        return X, y
-        
-    def _extract_features(self, audio_file: Path) -> np.ndarray:
-        """Extract MFCC features from audio file"""
+        # Dense layers
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(256, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(1, activation='sigmoid')
+    ])
+    
+    # Compile model
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        loss='binary_crossentropy',
+        metrics=['accuracy']
+    )
+    
+    return model
+
+def prepare_data():
+    """Prepare training data from audio samples"""
+    logger.info("Preparing training data...")
+    
+    # Get file paths
+    positive_dir = WAKE_WORD_CONFIG["positive_samples_dir"]
+    negative_dir = WAKE_WORD_CONFIG["negative_samples_dir"]
+    
+    positive_files = list(positive_dir.glob("*.wav"))
+    negative_files = list(negative_dir.glob("*.wav"))
+    
+    logger.info(f"Found {len(positive_files)} positive and {len(negative_files)} negative samples")
+    
+    # Prepare data arrays
+    features_list = []
+    labels = []
+    
+    # Calculate target length (2 seconds of audio)
+    target_frames = int(2.0 / 0.01)  # 2 seconds with 10ms step size
+    
+    # Process positive samples
+    for file_path in positive_files:
         try:
-            # Load audio file
-            audio, _ = librosa.load(audio_file, sr=self.sample_rate)
+            audio_data = load_audio_file(file_path)
+            features = extract_features(audio_data, AUDIO_SETTINGS["sample_rate"])
             
-            # Extract MFCC features
-            features = mfcc(
-                audio,
-                samplerate=self.sample_rate,
-                numcep=self.n_mfcc,
-                nfilt=self.n_mel,
-                winlen=self.window_size,
-                winstep=self.hop_size
-            )
+            # Pad or truncate to target length
+            if features.shape[0] > target_frames:
+                features = features[:target_frames]
+            elif features.shape[0] < target_frames:
+                pad_width = ((0, target_frames - features.shape[0]), (0, 0))
+                features = np.pad(features, pad_width, mode='constant')
             
-            # Normalize features
-            features = (features - np.mean(features)) / np.std(features)
-            
-            # Reshape for CNN input (add channel dimension)
-            features = features.reshape(features.shape[0], features.shape[1], 1)
-            
-            return features
-            
+            features_list.append(features)
+            labels.append(1)
         except Exception as e:
-            logger.error(f"Error processing {audio_file}: {e}")
-            return None
+            logger.error(f"Error processing {file_path}: {e}")
+            continue
+    
+    # Process negative samples
+    for file_path in negative_files:
+        try:
+            audio_data = load_audio_file(file_path)
+            features = extract_features(audio_data, AUDIO_SETTINGS["sample_rate"])
             
-    def create_model(self) -> tf.keras.Model:
-        """Create the wake word detection model"""
-        model = tf.keras.Sequential([
-            # CNN layers
-            tf.keras.layers.Conv1D(32, 3, activation='relu', input_shape=(self.n_mfcc, 1)),
-            tf.keras.layers.MaxPooling1D(2),
-            tf.keras.layers.Conv1D(64, 3, activation='relu'),
-            tf.keras.layers.MaxPooling1D(2),
-            tf.keras.layers.Conv1D(64, 3, activation='relu'),
+            # Pad or truncate to target length
+            if features.shape[0] > target_frames:
+                features = features[:target_frames]
+            elif features.shape[0] < target_frames:
+                pad_width = ((0, target_frames - features.shape[0]), (0, 0))
+                features = np.pad(features, pad_width, mode='constant')
             
-            # Dense layers
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dropout(0.5),
-            tf.keras.layers.Dense(1, activation='sigmoid')
-        ])
-        
-        model.compile(
-            optimizer='adam',
-            loss='binary_crossentropy',
-            metrics=['accuracy']
+            features_list.append(features)
+            labels.append(0)
+        except Exception as e:
+            logger.error(f"Error processing {file_path}: {e}")
+            continue
+    
+    # Convert to numpy arrays
+    X = np.array(features_list)
+    y = np.array(labels)
+    
+    # Reshape for CNN input (samples, time, features, channels)
+    X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
+    
+    logger.info(f"Prepared {len(X)} samples with shape {X.shape}")
+    
+    return X, y
+
+def train_model():
+    """Train the wake word detection model"""
+    logger.info("Starting model training...")
+    
+    # Prepare data
+    X, y = prepare_data()
+    
+    # Create and compile model
+    model = create_model(input_shape=(X.shape[1], X.shape[2], 1))
+    
+    # Create callbacks
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(
+            monitor='val_accuracy',
+            patience=5,
+            restore_best_weights=True
+        ),
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=str(WAKE_WORD_CONFIG["model_path"]),
+            monitor='val_accuracy',
+            save_best_only=True,
+            verbose=1
         )
-        
-        return model
-        
-    def train(self, epochs: int = 50, batch_size: int = 32, validation_split: float = 0.2):
-        """Train the wake word detection model"""
-        # Prepare data
-        X, y = self.prepare_data()
-        
-        # Split into training and validation sets
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=validation_split, random_state=42
-        )
-        
-        # Create and compile model
-        model = self.create_model()
-        logger.info(model.summary())
-        
-        # Create callbacks
-        callbacks = [
-            tf.keras.callbacks.EarlyStopping(
-                monitor='val_loss',
-                patience=5,
-                restore_best_weights=True
-            ),
-            tf.keras.callbacks.ModelCheckpoint(
-                self.model_dir / 'wake_word_model.h5',
-                monitor='val_accuracy',
-                save_best_only=True
-            )
-        ]
-        
-        # Train model
-        logger.info("Training model...")
-        history = model.fit(
-            X_train, y_train,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_data=(X_val, y_val),
-            callbacks=callbacks
-        )
-        
-        # Save final model
-        model.save(self.model_dir / 'wake_word_model_final.h5')
-        logger.info(f"Model saved to {self.model_dir}")
-        
-        return history
+    ]
+    
+    # Train model
+    history = model.fit(
+        X, y,
+        epochs=WAKE_WORD_CONFIG["training_epochs"],
+        batch_size=WAKE_WORD_CONFIG["batch_size"],
+        validation_split=WAKE_WORD_CONFIG["validation_split"],
+        callbacks=callbacks,
+        verbose=1
+    )
+    
+    # Save final model
+    model.save(WAKE_WORD_CONFIG["model_path"])
+    logger.info(f"Model saved to {WAKE_WORD_CONFIG['model_path']}")
+    
+    # Print final metrics
+    val_accuracy = max(history.history['val_accuracy'])
+    logger.info(f"Best validation accuracy: {val_accuracy:.2%}")
+    
+    return history
 
 if __name__ == "__main__":
-    trainer = WakeWordModelTrainer()
-    trainer.train() 
+    try:
+        print("\n" + "="*50)
+        print("🧠 Training Wake Word Detection Model")
+        print("="*50 + "\n")
+        
+        history = train_model()
+        
+        print("\n" + "="*50)
+        print("✅ Training Complete!")
+        print(f"Model saved to: {WAKE_WORD_CONFIG['model_path']}")
+        print("="*50 + "\n")
+        
+    except Exception as e:
+        logger.error(f"Error during training: {e}")
+        raise 

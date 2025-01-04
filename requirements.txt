@@ -12,16 +12,18 @@ tensorflow-hub>=0.12.0
 
 # Audio Processing
 webrtcvad>=2.0.10
-python-speech-features>=0.6.1
+python-speech-features==0.6
 
 # Utilities
 python-dotenv>=0.19.0
 pydantic>=1.8.2
 click>=8.0.3
+psutil>=5.8.0
 
 # Testing
 pytest>=6.2.5
 pytest-cov>=2.12.1
+pytest-benchmark>=3.4.1
 
 # Development
 black>=21.9b0

@@ -1,124 +1,218 @@
-# Wake Word Model Training Guide
+# Wake Word Detection Training Guide
 
-This guide explains how to train your own wake word detection model for Jarvis.
+This document provides detailed instructions for training and optimizing the wake word detection model for Jarvis.
 
 ## Overview
 
-The wake word detection system uses a Convolutional Neural Network (CNN) trained on MFCC (Mel-frequency cepstral coefficients) features to detect when someone says "Jarvis". The model is designed to be:
-- Fast (< 500ms detection time)
-- Accurate (> 95% accuracy)
-- Resource-efficient (< 5% CPU usage)
+The wake word detection system uses a Convolutional Neural Network (CNN) trained on Mel-frequency cepstral coefficients (MFCC) features extracted from audio samples. The model is designed to detect the wake word "Jarvis" with high accuracy while minimizing false positives and computational overhead.
 
-## Training Process
+## System Requirements
 
-### 1. Data Collection
+- Python 3.8 or higher
+- PyAudio with working microphone input
+- TensorFlow 2.5 or higher
+- 500MB+ free disk space for audio samples
+- 2GB+ RAM recommended
 
-Run the data collector:
+## Data Collection
+
+### Running the Data Collector
+
 ```bash
 python src/voice/training/data_collector.py
 ```
 
-#### Controls
-- Press 'p' to record a positive sample (saying "Jarvis")
-- Press 'n' to record a negative sample (other words/noise)
-- Press 'q' to quit
+### Controls
+- `p`: Record a positive sample (saying "Jarvis")
+- `n`: Record a negative sample (other words/noise)
+- `q`: Quit the data collection session
 
-#### Requirements
-- **Positive Samples**: At least 100 recordings of "Jarvis"
-  - Different voice tones (high, low, neutral)
-  - Different speaking speeds
-  - Different distances from microphone
-  - Different emotional states (calm, excited, tired)
-  
-- **Negative Samples**: At least 200 recordings
-  - Similar-sounding words
-  - Common background noises
-  - Regular conversation
-  - Music or TV sounds
-  - Other people speaking
+### Sample Requirements
 
-#### Tips for Quality Data
-1. **Environment**
-   - Record in your typical usage environment
-   - Include typical background noise
-   - Use your regular microphone setup
+Minimum recommended samples:
+- 100+ positive samples (saying "Jarvis")
+- 200+ negative samples (other words/background noise)
 
-2. **Variation**
-   - Record at different times of day
-   - Include different voice variations
-   - Move around while recording
-   - Include both clear and slightly muffled speech
+For better model performance, aim for:
+- 500+ positive samples
+- 1000+ negative samples
 
-3. **Similar Words**
-   - Record similar-sounding words as negative samples
-   - Include names that start with "J"
-   - Include words that rhyme with "Jarvis"
+### Recording Guidelines
 
-### 2. Model Training
+1. Positive Samples:
+   - Vary your speaking speed
+   - Use different intonations
+   - Record from different distances
+   - Include different accents if possible
+   - Mix formal/casual pronunciations
 
-Run the training script:
+2. Negative Samples:
+   - Similar-sounding words (e.g., "Jarred", "Service")
+   - Common background noises
+   - Conversations without the wake word
+   - Music and media playback
+   - Household sounds
+
+3. Environmental Considerations:
+   - Record in different rooms
+   - Include samples with background noise
+   - Mix quiet and noisy environments
+   - Various times of day
+   - Different microphone positions
+
+## Model Training
+
+### Running the Training Script
+
 ```bash
 python src/voice/training/train_model.py
 ```
 
-The script will:
-1. Process all collected audio samples
-2. Extract MFCC features
-3. Train a CNN model
-4. Save the best model to `models/wake_word_model.h5`
+### Training Parameters
 
-#### Training Parameters
-- Epochs: 50 (default)
-- Batch Size: 32 (default)
-- Validation Split: 20%
-- Early Stopping: 5 epochs patience
+Default parameters (configurable in `config/settings.py`):
+- Epochs: 50
+- Batch size: 32
+- Validation split: 20%
+- Learning rate: 0.001
+- Early stopping patience: 5
 
-You can modify these in `src/voice/training/train_model.py` if needed.
+### Model Architecture
 
-### 3. Validation
+The CNN model consists of:
+1. Input layer (MFCC features)
+2. Convolutional layers with max pooling
+3. Dropout for regularization
+4. Dense layers
+5. Binary classification output
 
-The training script will output:
-- Training accuracy
-- Validation accuracy
-- Model size
-- Training time
+### Training Process
 
-Aim for:
-- Validation accuracy > 95%
-- False positive rate < 1%
-- False negative rate < 0.5%
+1. Data Preprocessing:
+   - Audio normalization
+   - MFCC feature extraction
+   - Feature standardization
+   - Data augmentation (optional)
 
-### 4. Integration
+2. Model Training:
+   - Cross-validation
+   - Early stopping
+   - Model checkpointing
+   - Performance monitoring
 
-The trained model will automatically be used by the wake word detector. No additional setup is required.
+3. Evaluation:
+   - Accuracy metrics
+   - Confusion matrix
+   - ROC curve
+   - Resource usage stats
+
+## Performance Optimization
+
+### Accuracy Improvement
+
+If detection accuracy is low:
+1. Collect more training data
+2. Increase model complexity
+3. Adjust detection threshold
+4. Implement data augmentation
+5. Try transfer learning
+
+### Latency Optimization
+
+If detection is slow:
+1. Reduce model size
+2. Optimize chunk size
+3. Enable TensorFlow optimizations
+4. Adjust feature extraction parameters
+5. Profile and optimize bottlenecks
+
+### Resource Usage
+
+To minimize resource usage:
+1. Use quantized models
+2. Optimize buffer sizes
+3. Implement batch processing
+4. Enable TensorFlow lite
+5. Profile memory usage
+
+## Monitoring and Metrics
+
+The system tracks:
+1. Detection accuracy
+2. Processing latency
+3. CPU/memory usage
+4. False positive rate
+5. Energy levels
+
+View metrics in:
+- Real-time logs
+- JSON reports in `data/metrics/`
+- Performance graphs (if enabled)
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Poor Detection Accuracy**
-   - Collect more training data
-   - Ensure good quality recordings
-   - Add more variety to samples
-   - Check microphone quality
+1. Poor Detection Rate:
+   - Insufficient training data
+   - Unbalanced dataset
+   - Noisy training samples
+   - Incorrect threshold
 
-2. **Slow Detection**
-   - Reduce model complexity
-   - Check system resources
-   - Ensure proper audio setup
+2. High Latency:
+   - Model too complex
+   - Resource contention
+   - Buffer size issues
+   - System overload
 
-3. **High False Positives**
-   - Add more negative samples
-   - Include similar-sounding words
-   - Increase detection threshold
+3. Resource Usage:
+   - Memory leaks
+   - Excessive logging
+   - Background processes
+   - Unoptimized model
 
-4. **High False Negatives**
-   - Add more positive samples
-   - Include voice variations
-   - Decrease detection threshold
+### Solutions
 
-## Advanced Customization
+1. Model Issues:
+   - Retrain with more data
+   - Adjust model architecture
+   - Tune hyperparameters
+   - Validate training data
 
-The model architecture and training parameters can be customized in:
-- `src/voice/training/train_model.py` - Model architecture and training
-- `config/settings.py` - Detection thresholds and audio parameters 
+2. System Issues:
+   - Check audio setup
+   - Monitor resource usage
+   - Optimize configurations
+   - Update dependencies
+
+3. Performance Issues:
+   - Profile the system
+   - Optimize bottlenecks
+   - Adjust buffer sizes
+   - Enable optimizations
+
+## Best Practices
+
+1. Data Collection:
+   - Regular data updates
+   - Diverse sample sources
+   - Quality validation
+   - Proper labeling
+
+2. Training:
+   - Cross-validation
+   - Regular evaluation
+   - Version control
+   - Parameter tuning
+
+3. Deployment:
+   - Gradual rollout
+   - Performance monitoring
+   - Regular updates
+   - User feedback
+
+4. Maintenance:
+   - Regular retraining
+   - Performance audits
+   - System updates
+   - Documentation updates 

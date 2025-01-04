@@ -8,6 +8,15 @@ A sophisticated AI-powered personal assistant inspired by Iron Man's JARVIS, fea
 
 ### Voice Interaction
 - Wake word detection with "Jarvis"
+  - CNN-based model with MFCC features
+  - < 500ms detection latency
+  - < 5% CPU usage in standby
+  - > 98% accuracy target
+  - Real-time user feedback system
+  - Environmental noise resistance
+  - Multi-speaker support
+  - Performance monitoring and metrics
+  - Automatic energy level adjustment
 - Secure speaker recognition
 - Natural voice synthesis with customizable voice cloning
 - Real-time voice processing
@@ -75,28 +84,13 @@ cp .env.example .env
 # Edit .env with your API keys and configurations
 ```
 
-5. Train the wake word model:
+5. Train the wake word model (see detailed guide in `docs/wake-word-training.md`):
 ```bash
-# Step 1: Collect training data
+# Collect training data
 python src/voice/training/data_collector.py
-# Use these keys during collection:
-# 'p' - Record a positive sample (saying "Jarvis")
-# 'n' - Record a negative sample (other words/noise)
-# 'q' - Quit recording
 
-# Recommended samples:
-# - At least 100 positive samples of "Jarvis"
-# - At least 200 negative samples
-# Tips for good training data:
-# - Record in different voice tones
-# - Record from different distances
-# - Include background noise
-# - Include similar-sounding words
-# - Record with different people if possible
-
-# Step 2: Train the model
+# Train the model
 python src/voice/training/train_model.py
-# This will create a model file in the models/ directory
 ```
 
 6. Run initial setup:
@@ -114,11 +108,6 @@ python scripts/run.py
 ### Core Components
 1. **Voice Processing**
    - Wake word detection
-     - CNN-based model for "Jarvis" detection
-     - MFCC feature extraction
-     - Real-time audio processing
-     - Custom model training support
-     - ~500ms detection latency
    - Speaker recognition
    - Voice synthesis
 
@@ -160,15 +149,26 @@ python scripts/run.py
 
 ## 🧪 Testing
 
-Run the test suite:
+Run all tests:
 ```bash
 pytest tests/
 ```
 
-Performance testing:
+Test wake word detection:
 ```bash
-python scripts/performance_test.py
+# Run wake word detection tests
+pytest tests/voice/test_wake_word.py -v
+
+# Start wake word detection
+python scripts/run_wake_word.py
+
+# After each detection:
+# Press 'y' if detection was correct
+# Press 'n' if detection was incorrect
+# Press Ctrl+C to stop
 ```
+
+Performance metrics are automatically collected and saved in `data/metrics/`.
 
 ## 📚 Documentation
 
@@ -200,6 +200,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🔄 Version History
 
 - v0.1.0 - Initial development version
+- v0.2.0 - Wake word detection system
+  - CNN-based wake word model
+  - Real-time user feedback
+  - Performance monitoring
+  - Environmental testing
+  - Resource usage optimization
 - Future releases TBD
 
 ## ⚠️ Disclaimer
