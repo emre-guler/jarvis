@@ -48,16 +48,20 @@ class TestVoiceAdaptation:
         """Test adaptation threshold conditions"""
         user_id = "test_user"
         
-        # Initial adaptation
-        adaptation.adapt_profile(user_id, sample_features, 0.95)
+        # Initial adaptation should always occur for new users
+        adapted = adaptation.adapt_profile(user_id, sample_features, 0.95)
+        assert adapted is not None
         
-        # Immediate re-adaptation should not occur
-        adapted = adaptation.adapt_profile(user_id, sample_features * 1.01, 0.94)
+        # Adaptation should not occur if verification score is below threshold
+        adapted = adaptation.adapt_profile(user_id, sample_features * 1.01, 0.84)  # Below 0.85 threshold
         assert adapted is None
         
-        # Significant feature drift should trigger adaptation
-        drifted_features = sample_features * 1.5
-        adapted = adaptation.adapt_profile(user_id, drifted_features, 0.85)
+        # Adaptation should not occur if score difference is too small
+        adapted = adaptation.adapt_profile(user_id, sample_features * 1.01, 0.96)  # Only 0.01 difference
+        assert adapted is None
+        
+        # Adaptation should occur with significant score difference
+        adapted = adaptation.adapt_profile(user_id, sample_features * 1.5, 0.90)  # 0.05 difference
         assert adapted is not None
         
     def test_time_based_adaptation(self, adaptation, sample_features, monkeypatch):

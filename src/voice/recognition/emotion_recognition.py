@@ -35,17 +35,18 @@ class EmotionRecognizer:
             tf.keras.layers.Input(shape=(220,)),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Dense(512, activation='relu'),
-            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(256, activation='relu'),
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(128, activation='relu'),
             tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dense(64, activation='relu'),
             tf.keras.layers.Dense(7, activation='softmax')
         ])
         
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005),
             loss='categorical_crossentropy',
             metrics=['accuracy']
         )
@@ -131,51 +132,52 @@ class EmotionRecognizer:
             # Extract features
             features = self.extract_emotion_features(audio_data)
             
-            # Make prediction
-            prediction = self.model.predict(features.reshape(1, -1), verbose=1)
+            # Reshape for model input
+            features = features.reshape(1, -1)
             
-            # Apply softmax with temperature
-            temperature = 0.5  # Lower temperature = more certainty
-            scaled_prediction = prediction[0] / temperature
-            probabilities = tf.nn.softmax(scaled_prediction).numpy()
+            # Get predictions
+            predictions = self.model.predict(features, verbose=0)[0]
             
-            # Get emotion label and probabilities
-            emotion_idx = np.argmax(probabilities)
-            emotion = self.emotions[emotion_idx]
+            # Apply softmax temperature scaling for better calibration
+            temperature = 0.5  # Lower temperature for sharper probabilities
+            scaled_predictions = tf.nn.softmax(predictions / temperature).numpy()
             
-            # Calculate confidence scores
-            confidence_scores = {
-                self.emotions[i]: float(score) 
-                for i, score in enumerate(probabilities)
-            }
-            
-            # Adjust confidence based on audio characteristics
+            # Adjust probabilities based on audio characteristics
             energy = np.mean(np.abs(audio_data))
             pitch = librosa.yin(audio_data, fmin=50, fmax=500)
             pitch_mean = np.nanmean(pitch)
             
-            # High energy suggests active emotions (angry, happy, surprised)
-            if energy > 0.5:
-                for e in ["angry", "happy", "surprised"]:
-                    confidence_scores[e] *= 1.5
-                    
-            # High pitch suggests happy/surprised, low pitch suggests sad/angry
-            if pitch_mean > 200:  # High pitch
-                confidence_scores["happy"] *= 1.3
-                confidence_scores["surprised"] *= 1.3
-            elif pitch_mean < 100:  # Low pitch
-                confidence_scores["sad"] *= 1.3
-                confidence_scores["angry"] *= 1.3
+            # Convert to probabilities dict
+            probabilities = {
+                emotion: float(prob)
+                for emotion, prob in zip(self.emotions.values(), scaled_predictions)
+            }
+            
+            # Adjust probabilities based on audio characteristics
+            if energy > 0.5:  # High energy
+                probabilities["angry"] *= 1.5
+                probabilities["happy"] *= 1.5
+                probabilities["surprised"] *= 1.5
+            else:  # Low energy
+                probabilities["sad"] *= 1.5
+                probabilities["neutral"] *= 1.5
                 
-            # Normalize scores
-            total = sum(confidence_scores.values())
-            confidence_scores = {k: v/total for k, v in confidence_scores.items()}
+            if pitch_mean > 200:  # High pitch
+                probabilities["happy"] *= 1.3
+                probabilities["surprised"] *= 1.3
+            elif pitch_mean < 100:  # Low pitch
+                probabilities["sad"] *= 1.3
+                probabilities["angry"] *= 1.3
+                
+            # Normalize probabilities
+            total = sum(probabilities.values())
+            probabilities = {k: v/total for k, v in probabilities.items()}
             
-            # Get highest confidence emotion
-            emotion = max(confidence_scores.items(), key=lambda x: x[1])[0]
+            # Get emotion with highest probability
+            max_emotion = max(probabilities.items(), key=lambda x: x[1])
             
-            return emotion, confidence_scores
+            return max_emotion[0], probabilities
             
         except Exception as e:
             logger.error(f"Error detecting emotion: {e}")
-            return "neutral", {e: 1.0/7.0 for e in self.emotions.values()} 
+            return "neutral", {emotion: 1.0/len(self.emotions) for emotion in self.emotions.values()} 

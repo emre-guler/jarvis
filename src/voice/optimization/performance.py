@@ -3,7 +3,7 @@ import logging
 import time
 import psutil
 import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from collections import deque
 from datetime import datetime
 
@@ -53,28 +53,21 @@ class PerformanceOptimizer:
         self.is_monitoring = False
         logger.info("Stopped performance monitoring")
         
-    def record_verification(self, duration: float, success: bool, similarity: Optional[float] = None):
-        """Record verification metrics
-        
-        Args:
-            duration: Time taken for verification
-            success: Whether verification was successful
-            similarity: Optional similarity score (used as confidence)
-        """
-        if duration > self.max_verification_time:
-            logger.warning(f"Verification time ({duration:.2f}s) exceeded threshold")
+    def record_verification(self, duration: float, success: bool, score: float = None):
+        """Record verification performance metrics"""
+        try:
+            self.performance_stats["verification_times"].append(duration)
+            self.performance_stats["verification_success"].append(success)
             
-        self.verification_times.append(duration)
-        self.verification_results.append(success)
-        
-        if similarity is not None:
-            self.similarity_scores.append(similarity)
-            self.performance_stats["similarity_scores"].append(similarity)
-            self.performance_stats["accuracy_scores"].append(similarity)
-        
-        # Update performance stats
-        self.performance_stats["verification_times"].append(duration)
-        self.performance_stats["verification_results"].append(success)
+            if score is not None:
+                self.performance_stats["accuracy_scores"].append(score)
+                
+            # Log warning if verification time exceeds threshold
+            if duration > 1.0:
+                logger.warning(f"Verification time ({duration:.2f}s) exceeded threshold")
+                
+        except Exception as e:
+            logger.error(f"Error recording verification metrics: {e}")
         
     def record_processing(self, duration: float):
         """Record processing time
@@ -121,97 +114,80 @@ class PerformanceOptimizer:
             return 0.0
         return np.mean(self.verification_times)
         
-    def get_performance_summary(self) -> Dict[str, float]:
-        """Get performance summary
-        
-        Returns:
-            Dict containing performance metrics
-        """
-        # Calculate basic metrics
-        avg_verification_time = np.mean(self.verification_times) if self.verification_times else 0.0
-        verification_rate = self.get_verification_rate()
-        avg_similarity = np.mean(self.similarity_scores) if self.similarity_scores else 0.0
-        avg_cpu = np.mean(self.cpu_usage) if self.cpu_usage else 0.0
-        avg_memory = np.mean(self.memory_usage) if self.memory_usage else 0.0
-        avg_processing = np.mean(self.processing_times) if self.processing_times else 0.0
-        
-        return {
-            'avg_verification_time': float(avg_verification_time),
-            'verification_rate': float(verification_rate),
-            'avg_similarity': float(avg_similarity),
-            'avg_cpu_usage': float(avg_cpu),
-            'avg_memory_usage': float(avg_memory),
-            'avg_processing_time': float(avg_processing),
-            'accuracy': float(verification_rate),
-            'verification': {
-                'success_rate': float(verification_rate),
-                'avg_time': float(avg_verification_time),
-                'avg_similarity': float(avg_similarity)
-            },
-            'processing': {
-                'avg_time': float(avg_processing),
-                'cpu_usage': float(avg_cpu),
-                'memory_usage': float(avg_memory)
-            },
-            'system': {
-                'cpu_usage': float(avg_cpu),
-                'memory_usage': float(avg_memory),
-                'verification_rate': float(verification_rate)
-            }
-        }
-        
-    def optimize_settings(self) -> Dict:
-        """Optimize recognition settings based on performance
-        
-        Returns:
-            Dict containing optimized settings
-        """
+    def get_performance_summary(self) -> Dict[str, Dict[str, float]]:
+        """Get performance summary statistics"""
         try:
-            # Initialize with default settings
-            settings = {
-                'chunk_size': 1024,
-                'buffer_size': 4096,
-                'threshold': 0.5,
-                'timeout': 5.0,
-                'processing_threads': 2,
-                'feature_settings': {
-                    'n_mfcc': 20,
-                    'frame_length': 0.025,
-                    'frame_shift': 0.010
+            verification_times = self.performance_stats["verification_times"]
+            processing_times = self.performance_stats["processing_times"]
+            accuracy_scores = self.performance_stats["accuracy_scores"]
+            cpu_usage = self.performance_stats["cpu_usage"]
+            memory_usage = self.performance_stats["memory_usage"]
+            
+            summary = {
+                "verification": {
+                    "mean_time": float(np.mean(verification_times)),
+                    "std_time": float(np.std(verification_times)),
+                    "min_time": float(np.min(verification_times)),
+                    "max_time": float(np.max(verification_times))
+                },
+                "accuracy": {
+                    "mean_score": float(np.mean(accuracy_scores)),
+                    "std_score": float(np.std(accuracy_scores))
+                },
+                "processing": {
+                    "mean_time": float(np.mean(processing_times)),
+                    "std_time": float(np.std(processing_times))
+                },
+                "system": {
+                    "mean_cpu": float(np.mean(cpu_usage)),
+                    "mean_memory": float(np.mean(memory_usage))
                 }
             }
             
-            # Get current metrics
-            metrics = self.get_performance_summary()
+            return summary
             
-            # Optimize based on verification time
-            if metrics['avg_verification_time'] > self.max_verification_time:
-                settings.update({
-                    'chunk_size': 512,
-                    'buffer_size': 2048,
-                    'processing_threads': 4,
-                    'feature_settings': {
-                        'n_mfcc': 13,
-                        'frame_length': 0.020,
-                        'frame_shift': 0.010
-                    }
-                })
+        except Exception as e:
+            logger.error(f"Error generating performance summary: {e}")
+            return {}
             
-            # Optimize based on CPU usage
-            if metrics['avg_cpu_usage'] > self.max_cpu_usage:
-                settings.update({
-                    'chunk_size': 2048,
-                    'buffer_size': 8192,
-                    'processing_threads': 1,
-                    'timeout': 3.0
-                })
-                
-            # Ensure all values are numeric
-            settings = {k: float(v) if isinstance(v, (int, float)) else v 
-                       for k, v in settings.items()}
-                
+    def optimize_settings(self) -> Dict[str, Union[int, float]]:
+        """Optimize performance settings based on metrics"""
+        try:
+            summary = self.get_performance_summary()
+            
+            # Default settings
+            settings = {
+                "chunk_size": 1024,
+                "buffer_size": 4096,
+                "processing_threads": 2
+            }
+            
+            # Adjust based on performance metrics
+            if summary:
+                # CPU usage based adjustments
+                if summary["system"]["mean_cpu"] > 70:
+                    settings["processing_threads"] = 1
+                    settings["chunk_size"] = 2048
+                elif summary["system"]["mean_cpu"] < 30:
+                    settings["processing_threads"] = 4
+                    settings["chunk_size"] = 512
+                    
+                # Memory usage based adjustments
+                if summary["system"]["mean_memory"] > 1000:  # MB
+                    settings["buffer_size"] = 2048
+                elif summary["system"]["mean_memory"] < 500:  # MB
+                    settings["buffer_size"] = 8192
+                    
+                # Latency based adjustments
+                if "verification" in summary and summary["verification"]["mean_time"] > 1.0:
+                    settings["chunk_size"] = min(settings["chunk_size"] * 2, 4096)
+                    
             return settings
             
         except Exception as e:
             logger.error(f"Error optimizing settings: {e}")
-            return {} 
+            return {
+                "chunk_size": 1024,
+                "buffer_size": 4096,
+                "processing_threads": 2
+            } 

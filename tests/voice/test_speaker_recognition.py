@@ -44,17 +44,18 @@ def test_feature_extraction(feature_extractor, mock_audio_data):
     features = feature_extractor.extract_features(mock_audio_data)
     
     # Verify feature structure
-    assert isinstance(features, dict)
-    assert 'mfcc_mean' in features
-    assert 'f0_mean' in features
-    assert 'zcr_mean' in features
+    assert isinstance(features, np.ndarray)
+    assert features is not None
+    assert len(features) > 0
     
-    # Verify feature dimensions
-    assert len(features['mfcc_mean']) == feature_extractor.n_mfcc
-    assert isinstance(features['f0_mean'], list)
-    assert isinstance(features['zcr_mean'], list)
-    assert len(features['f0_mean']) == 1
-    assert len(features['zcr_mean']) == 1
+    # Expected feature count:
+    # - MFCC mean and std (20 * 2)
+    # - Delta mean and std (20 * 2)
+    # - Delta2 mean and std (20 * 2)
+    # - Spectral features (3)
+    # - Prosodic features (4)
+    expected_features = (20 * 6) + 7
+    assert len(features) == expected_features
 
 def test_feature_comparison(feature_extractor, mock_audio_data):
     """Test feature comparison functionality"""
@@ -163,7 +164,7 @@ def test_feature_statistics(feature_extractor, mock_audio_data):
     
     # Verify statistics
     assert isinstance(stats, dict)
-    assert all('_mean' in key or '_std' in key for key in stats.keys())
-    assert all(isinstance(value, list) for value in stats.values())
-    # Verify non-empty lists
+    assert all(key in stats for key in ['mean', 'std', 'min', 'max'])
+    assert all(isinstance(value, np.ndarray) for value in stats.values())
+    # Verify non-empty arrays
     assert all(len(value) > 0 for value in stats.values()) 

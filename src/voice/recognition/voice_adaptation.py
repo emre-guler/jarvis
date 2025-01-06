@@ -5,6 +5,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -26,52 +27,58 @@ class VoiceAdaptation:
         # Load existing adaptation history
         self._load_history()
         
-    def adapt_profile(self, user_id: str, features: np.ndarray, verification_score: float) -> Optional[np.ndarray]:
-        """Adapt a user's voice profile based on new features
+    def adapt_profile(self, user_id: str, features: np.ndarray, score: float) -> Optional[np.ndarray]:
+        """Adapt user profile based on new features
         
         Args:
-            user_id: User identifier
-            features: New voice features
-            verification_score: Verification confidence score
+            user_id: User ID
+            features: New feature vector
+            score: Verification score
             
         Returns:
             Optional[np.ndarray]: Adapted features if adaptation occurred, None otherwise
         """
         try:
-            # Initialize history for new users
+            # Always adapt for new users
             if user_id not in self.adaptation_history:
-                self.adaptation_history[user_id] = []
+                self.adaptation_history[user_id] = {
+                    "last_adaptation": time.time(),
+                    "feature_history": [features],
+                    "score_history": [score]
+                }
+                return features
                 
-            history = self.adaptation_history[user_id]
+            # Check if adaptation is needed based on score and time
+            time_since_last = time.time() - self.adaptation_history[user_id]["last_adaptation"]
             
-            # Check if adaptation is needed
-            if not self._should_adapt(user_id, verification_score):
-                return None
+            # Adapt if:
+            # 1. Score is above threshold (0.85) AND
+            # 2. Either:
+            #    a. Time since last adaptation > 24 hours OR
+            #    b. Score difference > 0.05 from average
+            if score >= 0.85:
+                avg_score = np.mean(self.adaptation_history[user_id]["score_history"])
+                score_diff = abs(score - avg_score)
                 
-            # Create adaptation record
-            adaptation = {
-                'timestamp': datetime.now().isoformat(),
-                'features': features.tolist(),
-                'verification_score': verification_score
-            }
-            
-            # Add to history
-            history.append(adaptation)
-            
-            # Trim history if needed
-            if len(history) > self.max_history_size:
-                history = history[-self.max_history_size:]
-                
-            # Calculate adapted features
-            adapted_features = self._calculate_adapted_features(history)
-            
-            # Save updated history
-            self._save_history()
-            
-            return adapted_features
+                if time_since_last > 86400 or score_diff > 0.05:
+                    # Update history
+                    self.adaptation_history[user_id]["last_adaptation"] = time.time()
+                    self.adaptation_history[user_id]["feature_history"].append(features)
+                    self.adaptation_history[user_id]["score_history"].append(score)
+                    
+                    # Keep only last 5 samples
+                    if len(self.adaptation_history[user_id]["feature_history"]) > 5:
+                        self.adaptation_history[user_id]["feature_history"] = self.adaptation_history[user_id]["feature_history"][-5:]
+                        self.adaptation_history[user_id]["score_history"] = self.adaptation_history[user_id]["score_history"][-5:]
+                    
+                    # Calculate adapted features
+                    adapted_features = np.mean(self.adaptation_history[user_id]["feature_history"], axis=0)
+                    return adapted_features
+                    
+            return None
             
         except Exception as e:
-            logger.error(f"Error during voice adaptation: {e}")
+            logger.error(f"Error adapting profile: {e}")
             return None
             
     def _should_adapt(self, user_id: str, verification_score: float) -> bool:
@@ -84,20 +91,18 @@ class VoiceAdaptation:
         last_adaptation = datetime.fromisoformat(history[-1]['timestamp'])
         time_since_last = datetime.now() - last_adaptation
         
-        # For testing purposes, use a shorter interval
-        if time_since_last < timedelta(milliseconds=100):
-            return False
+        # Time-based adaptation (30 days)
+        if time_since_last >= self.min_adaptation_interval:
+            return verification_score >= self.adaptation_threshold
             
+        # Score-based adaptation
         if verification_score < self.adaptation_threshold:
             return False
             
-        # Only adapt if score is different enough
+        # Check score difference
         last_score = float(history[-1]['verification_score'])
         score_diff = abs(verification_score - last_score)
-        if score_diff < 0.05:  # 5% difference threshold
-            return False
-            
-        return True
+        return score_diff >= 0.05  # 5% difference threshold
         
     def _calculate_adapted_features(self, history: List[dict]) -> np.ndarray:
         """Calculate adapted features from history"""
@@ -125,7 +130,7 @@ class VoiceAdaptation:
             feature_arrays = np.array(feature_arrays)
             weights = np.array(weights)
             
-            # Normalize weights with epsilon to prevent division by zero
+            # Normalize weights
             weights = weights / (np.sum(weights) + 1e-10)
             
             # Calculate weighted average
