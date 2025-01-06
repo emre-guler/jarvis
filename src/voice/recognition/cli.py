@@ -39,34 +39,75 @@ class AudioRecorder:
         Returns:
             Recorded audio data
         """
-        stream = self.audio.open(
-            format=self.format,
-            channels=self.channels,
-            rate=self.sample_rate,
-            input=True,
-            frames_per_buffer=self.chunk_size
-        )
+        try:
+            # Find the best input device
+            device_index = None
+            for i in range(self.audio.get_device_count()):
+                device_info = self.audio.get_device_info_by_index(i)
+                if device_info['maxInputChannels'] > 0:
+                    device_index = i
+                    logger.info(f"Using input device: {device_info['name']}")
+                    break
+
+            if device_index is None:
+                raise RuntimeError("No input device found")
+
+            # Open stream with more robust settings
+            stream = self.audio.open(
+                format=self.format,
+                channels=self.channels,
+                rate=self.sample_rate,
+                input=True,
+                input_device_index=device_index,
+                frames_per_buffer=self.chunk_size,
+                start=False  # Don't start immediately
+            )
+            
+            print("\n🎤 Recording in 3 seconds...")
+            time.sleep(1)
+            print("2...")
+            time.sleep(1)
+            print("1...")
+            time.sleep(1)
+            
+            # Start the stream
+            stream.start_stream()
+            print("Recording... Speak now!")
+            
+            frames = []
+            num_chunks = int(self.sample_rate / self.chunk_size * duration)
+            
+            # Record audio with overflow handling
+            for _ in range(num_chunks):
+                try:
+                    data = stream.read(self.chunk_size, exception_on_overflow=False)
+                    frames.append(np.frombuffer(data, dtype=np.float32))
+                except Exception as e:
+                    logger.warning(f"Dropped frame: {e}")
+                    continue
+            
+            print("Done recording!")
+            
+            # Stop and close stream
+            stream.stop_stream()
+            stream.close()
+            
+            if not frames:
+                raise RuntimeError("No audio frames recorded")
+            
+            # Convert to numpy array
+            audio_data = np.concatenate(frames)
+            
+            # Normalize audio
+            if np.max(np.abs(audio_data)) > 0:
+                audio_data = audio_data / np.max(np.abs(audio_data))
+            
+            return audio_data
+            
+        except Exception as e:
+            logger.error(f"Error recording audio: {e}")
+            raise
         
-        print("\n🎤 Recording in 3 seconds...")
-        time.sleep(1)
-        print("2...")
-        time.sleep(1)
-        print("1...")
-        time.sleep(1)
-        print("Recording... Speak now!")
-        
-        frames = []
-        for _ in range(0, int(self.sample_rate / self.chunk_size * duration)):
-            data = stream.read(self.chunk_size)
-            frames.append(np.frombuffer(data, dtype=np.float32))
-        
-        print("Done recording!")
-        
-        stream.stop_stream()
-        stream.close()
-        
-        return np.concatenate(frames)
-    
     def cleanup(self):
         """Clean up audio resources"""
         self.audio.terminate()

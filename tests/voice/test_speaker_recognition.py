@@ -9,7 +9,7 @@ import tempfile
 from datetime import datetime
 
 from src.voice.recognition.speaker_recognizer import SpeakerRecognizer
-from src.voice.recognition.profile_manager import VoiceProfile
+from src.voice.recognition.profile_manager import VoiceProfileManager
 from src.voice.recognition.feature_extractor import VoiceFeatureExtractor
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def test_profile_creation(speaker_recognizer, mock_audio_data):
     profile = speaker_recognizer.enroll_user(user_id, mock_audio_data, metadata)
     
     # Verify profile
-    assert isinstance(profile, VoiceProfile)
+    assert isinstance(profile, VoiceProfileManager)
     assert profile.user_id == user_id
     assert profile.metadata == metadata
     assert profile.samples_count == 1

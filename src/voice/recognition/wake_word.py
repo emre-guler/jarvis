@@ -67,7 +67,7 @@ class WakeWordDetector:
         self.cooldown_period = WAKE_WORD_CONFIG["cooldown_period"]
         
         # Performance optimization parameters
-        self.process_every_n_chunks = 2  # Reduced for better responsiveness
+        self.process_every_n_chunks = 2  # Process every other chunk
         self.chunk_counter = 0
         self.batch_size = 4
         self.processing_batch = []
@@ -79,28 +79,63 @@ class WakeWordDetector:
         }
         
         # Power saving settings
-        self.power_mode = "performance"  # Changed to performance mode
-        self.processing_interval = 0.02  # Reduced for faster response
+        self.power_mode = "balanced"  # Balance between performance and power
+        self.processing_interval = 0.05  # 50ms interval
+        self.active_processing = True  # Flag for active processing
         
         # Initialize performance monitoring
         self.monitor = PerformanceMonitor()
         
-        # Start periodic metrics logging with reduced frequency
+        # Start periodic metrics logging
         self.metrics_thread = threading.Thread(target=self._log_metrics_periodically)
         self.metrics_thread.daemon = True
         self.metrics_thread.start()
 
+    def _create_dummy_model(self):
+        """Create a simple model for testing"""
+        model = tf.keras.Sequential([
+            tf.keras.layers.Input(shape=(200, 13, 1)),  # Match feature shape
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.25),
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.25),
+            tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.4),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.5),
+            tf.keras.layers.Dense(1, activation='sigmoid')
+        ])
+        
+        model.compile(
+            optimizer='adam',
+            loss='binary_crossentropy',
+            metrics=['accuracy']
+        )
+        return model
+        
     def _load_model(self):
         """Load the wake word detection model"""
         try:
             model_path = Path("models/wake_word_model.keras")
             if model_path.exists():
-                self.model = tf.keras.models.load_model(str(model_path))
-                logger.info(f"Wake word model loaded from {model_path}")
+                try:
+                    self.model = tf.keras.models.load_model(str(model_path))
+                    logger.info(f"Wake word model loaded from {model_path}")
+                except Exception as e:
+                    logger.warning(f"Error loading saved model: {e}")
+                    logger.info("Creating new model...")
+                    self.model = self._create_dummy_model()
             else:
-                logger.warning("No trained model found at models/wake_word_model.keras")
-                logger.warning("Please train the model first using src/voice/training/train_model.py")
-                raise FileNotFoundError("Wake word model not found")
+                logger.warning("No trained model found, creating new model...")
+                self.model = self._create_dummy_model()
             
             # Warm up the model
             dummy_input = np.zeros((1, 200, 13, 1))  # Shape matches our training data
@@ -110,142 +145,98 @@ class WakeWordDetector:
             logger.error(f"Error loading wake word model: {e}")
             raise
 
-    def _create_dummy_model(self):
-        """Create a simple model for testing"""
-        model = tf.keras.Sequential([
-            tf.keras.layers.Input(shape=(13, 49, 1)),  # MFCC features
-            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
-            tf.keras.layers.MaxPooling2D((2, 2)),
-            tf.keras.layers.Dropout(0.25),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(1, activation='sigmoid')
-        ])
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-        return model
-
     def start(self, callback: Callable[[float], None]):
-        """Start wake word detection"""
+        """Start wake word detection
+        
+        Args:
+            callback: Function to call when wake word is detected
+        """
         if self.is_running:
-            logger.warning("Wake word detector is already running")
             return
-
+            
         self.callback = callback
         self.is_running = True
-
-        try:
-            # Use the default input device from settings or system default
-            input_device_index = AUDIO_SETTINGS.get("input_device", None)
-            
-            if input_device_index is None:
-                # Find the first available input device
-                for i in range(self.audio.get_device_count()):
-                    device_info = self.audio.get_device_info_by_index(i)
-                    if device_info['maxInputChannels'] > 0:
-                        input_device_index = i
-                        logger.info(f"Using input device: {device_info['name']} (device index: {input_device_index})")
-                        break
-
-            if input_device_index is None:
-                logger.error("No input devices found")
-                return
-
-            # Get the device info to use its native sample rate
-            device_info = self.audio.get_device_info_by_index(input_device_index)
-            self.device_sample_rate = int(device_info['defaultSampleRate'])
-            
-            # Start audio stream with the device's native sample rate
-            self.stream = self.audio.open(
-                format=self.format,
-                channels=AUDIO_SETTINGS["channels"],
-                rate=self.device_sample_rate,
-                input=True,
-                frames_per_buffer=1024,  # Fixed buffer size
-                input_device_index=input_device_index
-            )
-
-            # Verify stream is active
-            if not self.stream.is_active():
-                logger.error("Failed to start audio stream")
-                return
-                
-            logger.info("Audio stream is active and receiving input")
-            logger.info(f"Device sample rate: {self.device_sample_rate} Hz")
-            logger.info(f"Target sample rate: {self.target_sample_rate} Hz")
-
-            print("\n" + "="*50)
-            print("🎤 Wake Word Detection Active")
-            print("Say 'Jarvis' to trigger")
-            print("Press Ctrl+C to stop")
-            print("="*50 + "\n")
-
-            # Start processing in the main thread
-            self._process_audio_stream()
-
-        except Exception as e:
-            logger.error(f"Failed to start wake word detector: {e}")
-            self.stop()
-            raise
-
+        self.active_processing = True
+        
+        # Start audio stream
+        self.stream = self.audio.open(
+            format=self.format,
+            channels=1,
+            rate=self.target_sample_rate,
+            input=True,
+            frames_per_buffer=self.chunk_size,
+            stream_callback=self._audio_callback
+        )
+        
+        # Start processing thread
+        self.processing_thread = threading.Thread(target=self._process_audio_stream)
+        self.processing_thread.daemon = True
+        self.processing_thread.start()
+        
+        # Print status
+        logger.info("\n==================================================")
+        logger.info("🎤 Wake Word Detection Active")
+        logger.info("Say 'Jarvis' to trigger")
+        logger.info("Press Ctrl+C to stop")
+        logger.info("==================================================\n")
+        
     def _process_audio_stream(self):
-        """Process audio stream in real-time"""
-        logger.info("Starting audio processing")
-        
-        chunk_size = 1024
-        audio_buffer = []
-        required_samples = int(self.target_sample_rate * 0.5)  # 500ms of audio
-        
+        """Process audio stream for wake word detection"""
         while self.is_running:
             try:
-                # Read audio data
-                audio_data = self.stream.read(chunk_size, exception_on_overflow=False)
-                audio_buffer.append(audio_data)
+                # Power saving: Sleep when not actively processing
+                if not self.active_processing:
+                    time.sleep(0.1)  # Longer sleep when inactive
+                    continue
+                    
+                # Get audio chunk from buffer
+                audio_chunk = self.audio_buffer.get(timeout=1.0)
                 
-                # Process when we have enough data
-                total_samples = len(audio_buffer) * chunk_size
-                if total_samples >= required_samples:
-                    # Concatenate audio chunks
-                    audio_bytes = b''.join(audio_buffer)
-                    audio_np = np.frombuffer(audio_bytes, dtype=np.int16)
+                # Process every nth chunk
+                self.chunk_counter += 1
+                if self.chunk_counter % self.process_every_n_chunks != 0:
+                    continue
                     
-                    # Resample to target sample rate
-                    if self.device_sample_rate != self.target_sample_rate:
-                        ratio = self.target_sample_rate / self.device_sample_rate
-                        new_length = int(len(audio_np) * ratio)
-                        x_old = np.linspace(0, 1, len(audio_np))
-                        x_new = np.linspace(0, 1, new_length)
-                        audio_np = np.interp(x_new, x_old, audio_np)
+                # Check energy level
+                audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
+                if not self._check_audio_energy(audio_data):
+                    self.active_processing = False  # Reduce processing when no speech
+                    continue
                     
-                    # Calculate energy
-                    audio_float = audio_np.astype(np.float32) / 32768.0
-                    rms = np.sqrt(np.mean(audio_float**2))
-                    energy_db = 20 * np.log10(max(rms, 1e-10))
-                    
-                    logger.debug(f"Processing audio - Energy: {energy_db:.1f} dB")
-                    
-                    # Only process if energy is above threshold
-                    if energy_db > -40:  # Increased threshold for better detection
-                        # Extract features
-                        features = self._extract_features(audio_np.tobytes())
-                        
-                        if features is not None:
-                            # Get prediction
-                            confidence = float(self.model.predict(features, verbose=0)[0][0])
-                            logger.debug(f"Wake word confidence: {confidence:.3f}")
-                            
-                            # Check for wake word
-                            if confidence > 0.5:  # Lower threshold for testing
-                                print(f"\n✨ Wake word detected! (confidence: {confidence:.2f}, energy: {energy_db:.1f}dB)")
-                                if self.callback:
-                                    self.callback(confidence)
-                                time.sleep(0.5)  # Cooldown after detection
-                    
-                    # Keep only the most recent chunk
-                    audio_buffer = audio_buffer[-2:]
+                self.active_processing = True  # Resume active processing
                 
+                # Extract features
+                features = self._extract_features(audio_chunk)
+                if features is None:
+                    continue
+                    
+                # Add to batch
+                self.processing_batch.append(features)
+                
+                # Process batch
+                if len(self.processing_batch) >= self.batch_size:
+                    batch = np.array(self.processing_batch)
+                    prediction = self.model.predict(batch, verbose=0)
+                    
+                    # Check for wake word
+                    max_confidence = np.max(prediction)
+                    if max_confidence > self.min_confidence:
+                        current_time = time.time()
+                        if current_time - self.last_detection_time > self.cooldown_period:
+                            self.last_detection_time = current_time
+                            if self.callback:
+                                self.callback(max_confidence)
+                                
+                    # Clear batch
+                    self.processing_batch = []
+                    
+                # Power saving: Sleep between processing
+                time.sleep(self.processing_interval)
+                
+            except queue.Empty:
+                continue
             except Exception as e:
                 logger.error(f"Error processing audio: {e}")
-                logger.debug(f"Error details: {str(e)}", exc_info=True)
                 continue
 
     def _handle_keyboard_input(self):

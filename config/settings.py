@@ -14,9 +14,12 @@ METRICS_DIR = DATA_DIR / "metrics"
 AUDIO_SETTINGS = {
     "sample_rate": 16000,
     "channels": 1,
-    "chunk_size": 1024,
-    "format": "Int16",
+    "chunk_size": 4096,
+    "format": "Float32",
     "input_device": None,  # None uses default input device
+    "input_overflow_handler": "ignore",  # Handle overflow
+    "input_latency": 0.2,  # Added latency buffer
+    "max_recording_time": 5  # Maximum recording time in seconds
 }
 
 # Wake word detection settings
@@ -41,4 +44,17 @@ MONITORING_CONFIG = {
     "log_interval": 60,  # Seconds between metrics logging
     "save_interval": 300,  # Seconds between metrics saving
     "max_detection_history": 1000,  # Maximum number of detection events to keep
+}
+
+# Model settings
+MODEL_CONFIG = {
+    "emotion": {
+        "model_path": MODELS_DIR / "emotion_model.keras",
+        "input_shape": (220,),
+        "num_classes": 7,
+        "learning_rate": 0.001,
+        "batch_size": 32,
+        "epochs": 50,
+        "validation_split": 0.2,
+    }
 } 

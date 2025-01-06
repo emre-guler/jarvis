@@ -14,11 +14,20 @@ tensorflow-hub>=0.12.0
 webrtcvad>=2.0.10
 python-speech-features==0.6
 
+# Security
+cryptography>=3.4.7
+bcrypt>=3.2.0
+python-jose>=3.3.0
+
+# Performance Monitoring
+psutil>=5.8.0
+py-spy>=0.3.8
+
 # Utilities
 python-dotenv>=0.19.0
 pydantic>=1.8.2
 click>=8.0.3
-psutil>=5.8.0
+tqdm>=4.62.3
 
 # Testing
 pytest>=6.2.5
@@ -29,6 +38,10 @@ pytest-benchmark>=3.4.1
 black>=21.9b0
 pylint>=2.11.1
 isort>=5.9.3
+
+# Documentation
+mkdocs>=1.2.3
+mkdocs-material>=8.0.0
 
 # Wake Word Detection
 pynput>=1.7.3 

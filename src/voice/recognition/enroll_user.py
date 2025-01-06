@@ -50,7 +50,10 @@ class VoiceEnrollment:
                 channels=self.channels,
                 rate=self.sample_rate,
                 input=True,
-                frames_per_buffer=self.chunk_size
+                frames_per_buffer=self.chunk_size,
+                stream_callback=None,
+                input_device_index=None,
+                start=False  # Don't start immediately
             )
             
             print("\n🎤 Recording in 3 seconds...")
@@ -59,13 +62,20 @@ class VoiceEnrollment:
             time.sleep(1)
             print("1...")
             time.sleep(1)
+            
+            # Start the stream
+            stream.start_stream()
             print("Recording... Speak now!")
             
             # Record audio
             frames = []
             for _ in range(0, int(self.sample_rate / self.chunk_size * self.record_seconds)):
-                data = stream.read(self.chunk_size)
-                frames.append(np.frombuffer(data, dtype=np.float32))
+                try:
+                    data = stream.read(self.chunk_size, exception_on_overflow=False)
+                    frames.append(np.frombuffer(data, dtype=np.float32))
+                except Exception as e:
+                    logger.warning(f"Dropped frame: {e}")
+                    continue
             
             print("Done recording!")
             
@@ -73,6 +83,10 @@ class VoiceEnrollment:
             stream.stop_stream()
             stream.close()
             
+            if not frames:
+                logger.error("No audio frames recorded")
+                return None
+                
             # Convert to numpy array
             audio_data = np.concatenate(frames)
             return audio_data

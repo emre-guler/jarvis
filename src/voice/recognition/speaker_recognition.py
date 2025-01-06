@@ -11,6 +11,7 @@ import numpy as np
 import tensorflow as tf
 from python_speech_features import mfcc
 from sklearn.preprocessing import StandardScaler
+import librosa
 
 from config.settings import AUDIO_SETTINGS, MODEL_CONFIG
 
@@ -21,61 +22,65 @@ logger = logging.getLogger(__name__)
 class SpeakerRecognition:
     """Speaker Recognition System for Jarvis"""
 
-    def __init__(self, model_path: Optional[Path] = None, profiles_dir: Optional[Path] = None):
-        """Initialize the speaker recognition system
-        
-        Args:
-            model_path: Path to the speaker recognition model file
-            profiles_dir: Directory to store voice profiles
-        """
-        self.model_path = model_path
-        self.profiles_dir = profiles_dir or Path("data/voice_profiles")
-        self.profiles_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Load model
-        self._load_model()
-        
-        # Load voice profiles
-        self.voice_profiles: Dict[str, np.ndarray] = {}
-        self.load_profiles()
-        
-        # Initialize feature scaler
+    def __init__(self):
+        """Initialize the speaker recognition system with enhanced model"""
+        self.model = self._create_enhanced_model()
+        self.feature_extractor = self._create_feature_extractor()
         self.scaler = StandardScaler()
-
-    def _load_model(self):
-        """Load the speaker recognition model"""
-        try:
-            if self.model_path and self.model_path.exists():
-                self.model = tf.keras.models.load_model(str(self.model_path))
-                logger.info(f"Speaker recognition model loaded from {self.model_path}")
-            else:
-                logger.warning("No model file found, using dummy model for testing")
-                self.model = self._create_dummy_model()
-            
-            # Warm up the model
-            dummy_input = np.zeros((1, 13, 49, 1))
-            self.model.predict(dummy_input)
-            
-        except Exception as e:
-            logger.error(f"Error loading speaker recognition model: {e}")
-            raise
-
-    def _create_dummy_model(self):
-        """Create a simple model for testing"""
+        self.threshold = 0.95  # Increased threshold for stricter verification
+        
+    def _create_enhanced_model(self):
+        """Create an enhanced deep neural network model"""
         model = tf.keras.Sequential([
-            tf.keras.layers.Input(shape=(13, 49, 1)),  # MFCC features
-            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
-            tf.keras.layers.MaxPooling2D((2, 2)),
-            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-            tf.keras.layers.MaxPooling2D((2, 2)),
-            tf.keras.layers.Dropout(0.25),
-            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(1024, activation='relu'),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dense(512, activation='relu'),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Dense(128, activation='relu'),
             tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(32)  # Embedding dimension
+            tf.keras.layers.Dense(1, activation='sigmoid')
         ])
-        model.compile(optimizer='adam', loss='mse')
         return model
+        
+    def _create_feature_extractor(self):
+        """Create an enhanced feature extractor"""
+        return tf.keras.Sequential([
+            tf.keras.layers.Input(shape=(None,)),
+            tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, -1)),
+            tf.keras.layers.Conv1D(64, 8, activation='relu', padding='same'),
+            tf.keras.layers.MaxPooling1D(2),
+            tf.keras.layers.Conv1D(128, 8, activation='relu', padding='same'),
+            tf.keras.layers.MaxPooling1D(2),
+            tf.keras.layers.Conv1D(256, 8, activation='relu', padding='same'),
+            tf.keras.layers.GlobalAveragePooling1D()
+        ])
+        
+    def extract_features(self, audio_data):
+        """Extract enhanced voice features"""
+        # Extract MFCC features
+        mfcc = librosa.feature.mfcc(y=audio_data, sr=16000, n_mfcc=40)
+        
+        # Extract spectral features
+        spectral_centroid = librosa.feature.spectral_centroid(y=audio_data, sr=16000)
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=audio_data, sr=16000)
+        spectral_rolloff = librosa.feature.spectral_rolloff(y=audio_data, sr=16000)
+        
+        # Extract prosodic features
+        f0, voiced_flag, voiced_probs = librosa.pyin(audio_data, fmin=50, fmax=600)
+        
+        # Combine all features
+        features = np.concatenate([
+            np.mean(mfcc, axis=1),
+            np.std(mfcc, axis=1),
+            np.mean(spectral_centroid),
+            np.mean(spectral_bandwidth),
+            np.mean(spectral_rolloff),
+            np.mean(f0[~np.isnan(f0)]) if len(f0[~np.isnan(f0)]) > 0 else [0]
+        ])
+        
+        return features
 
     def create_profile(self, user_id: str, audio_samples: List[np.ndarray]) -> bool:
         """Create a voice profile for a user
