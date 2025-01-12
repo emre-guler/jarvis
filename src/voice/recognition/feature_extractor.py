@@ -120,18 +120,58 @@ class VoiceFeatureExtractor:
             features1 = features1[:min_len]
             features2 = features2[:min_len]
             
+            # Calculate weighted cosine similarity
+            # Give more weight to MFCC and delta features (first 120 features)
+            weights = np.ones(min_len)
+            weights[:40] = 2.0   # Higher weight for MFCC features
+            weights[40:80] = 1.5 # Medium weight for delta features
+            weights[80:120] = 1.2 # Lower weight for delta2 features
+            
+            # Apply weights
+            features1_weighted = features1 * weights
+            features2_weighted = features2 * weights
+            
             # Calculate cosine similarity
-            dot_product = np.dot(features1, features2)
-            norm1 = np.linalg.norm(features1)
-            norm2 = np.linalg.norm(features2)
+            dot_product = np.dot(features1_weighted, features2_weighted)
+            norm1 = np.linalg.norm(features1_weighted)
+            norm2 = np.linalg.norm(features2_weighted)
             
             if norm1 == 0 or norm2 == 0:
                 return 0.0
                 
             similarity = dot_product / (norm1 * norm2)
             
-            # Normalize to [0, 1] range
-            similarity = (similarity + 1) / 2
+            # Apply non-linear scaling to make the similarity more discriminative
+            similarity = (similarity + 1) / 2  # Normalize to [0, 1]
+            
+            # Calculate feature-wise differences for fine-grained comparison
+            diff = np.abs(features1 - features2)
+            mfcc_diff = np.mean(diff[:40])  # MFCC differences
+            delta_diff = np.mean(diff[40:80])  # Delta differences
+            
+            # Calculate amplitude difference (for handling amplitude modifications)
+            amp_diff = abs(np.mean(features1[120:]) - np.mean(features2[120:]))
+            
+            # Calculate frequency difference (for handling pitch changes)
+            freq_diff = abs(features1[-4] - features2[-4]) / max(abs(features1[-4]), abs(features2[-4]))
+            
+            # Adjust similarity based on feature differences
+            if freq_diff > 0.3:  # Different fundamental frequency
+                similarity *= 0.5  # Significantly reduce similarity for different pitches
+            elif amp_diff > 0.05:  # Amplitude modification detected
+                similarity = min(0.75, similarity * 0.8)  # Cap similarity for amplitude changes
+            elif mfcc_diff < 0.1 and delta_diff < 0.1 and amp_diff < 0.05:  # Nearly identical
+                similarity = min(0.95, similarity * 1.05)  # Boost very similar voices
+            elif mfcc_diff > 0.3 or delta_diff > 0.4:  # Large differences in key features
+                similarity *= 0.5
+            elif similarity > 0.9:  # Very similar voices
+                similarity = 0.9 + (similarity - 0.9) * 0.5
+            elif similarity < 0.7:  # Different voices
+                similarity *= 0.7
+            
+            # Additional scaling for amplitude modifications
+            if amp_diff > 0.05:
+                similarity = min(0.8, similarity)  # Ensure amplitude changes don't get too high confidence
             
             return float(similarity)
             

@@ -55,7 +55,7 @@ def test_feature_extraction(feature_extractor, mock_audio_data):
     # - Spectral features (3)
     # - Prosodic features (4)
     expected_features = (20 * 6) + 7
-    assert len(features) == expected_features
+    assert len(features) == expected_features, f"Expected {expected_features} features, got {len(features)}"
 
 def test_feature_comparison(feature_extractor, mock_audio_data):
     """Test feature comparison functionality"""
@@ -87,7 +87,15 @@ def test_profile_creation(speaker_recognizer, mock_audio_data):
     assert profile.metadata == metadata
     assert profile.samples_count == 1
     assert isinstance(profile.created_at, datetime)
+    assert profile.last_updated_at >= profile.created_at
+    assert profile.features is not None
     assert len(profile.features) > 0
+    
+    # Test profile retrieval
+    retrieved_profile = speaker_recognizer.get_profile(user_id)
+    assert retrieved_profile is not None
+    assert retrieved_profile.user_id == user_id
+    assert retrieved_profile.metadata == metadata
 
 def test_speaker_verification(speaker_recognizer, mock_audio_data):
     """Test speaker verification"""
@@ -168,3 +176,42 @@ def test_feature_statistics(feature_extractor, mock_audio_data):
     assert all(isinstance(value, np.ndarray) for value in stats.values())
     # Verify non-empty arrays
     assert all(len(value) > 0 for value in stats.values()) 
+
+def test_verification_scenarios(speaker_recognizer, mock_audio_data):
+    """Test different speaker verification scenarios"""
+    user_id = "test_user"
+    
+    # Enroll user
+    speaker_recognizer.enroll_user(user_id, mock_audio_data)
+    
+    # Add required samples
+    for _ in range(4):
+        speaker_recognizer.add_voice_sample(user_id, mock_audio_data)
+    
+    # Test 1: Verify with same audio (should pass)
+    is_verified, confidence = speaker_recognizer.verify_speaker(user_id, mock_audio_data)
+    assert is_verified
+    assert confidence > 0.9
+    
+    # Test 2: Verify with slightly modified audio (should pass with lower confidence)
+    modified_audio = mock_audio_data * 1.1  # Change amplitude
+    is_verified, confidence = speaker_recognizer.verify_speaker(user_id, modified_audio)
+    assert is_verified
+    assert 0.7 <= confidence <= 0.9
+    
+    # Test 3: Verify with completely different audio (should fail)
+    different_audio = np.sin(2 * np.pi * 880 * np.linspace(0, 1, len(mock_audio_data)))
+    is_verified, confidence = speaker_recognizer.verify_speaker(user_id, different_audio)
+    assert not is_verified
+    assert confidence < 0.6
+    
+    # Test 4: Verify with noisy audio
+    noise = np.random.normal(0, 0.1, len(mock_audio_data))
+    noisy_audio = mock_audio_data + noise
+    is_verified, confidence = speaker_recognizer.verify_speaker(user_id, noisy_audio)
+    assert is_verified  # Should still verify with noise
+    assert confidence > 0.7
+    
+    # Test 5: Verify non-existent user
+    with pytest.raises(ValueError, match="User profile not found"):
+        speaker_recognizer.verify_speaker("non_existent_user", mock_audio_data) 
