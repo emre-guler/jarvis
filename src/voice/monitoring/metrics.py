@@ -53,6 +53,24 @@ class PerformanceMonitor:
         # Start time for this monitoring session
         self.start_time = time.time()
         
+        # Initialize with first measurements
+        try:
+            process = psutil.Process()
+            # Get initial CPU usage
+            initial_cpu = process.cpu_percent(interval=0.1)
+            normalized_cpu = initial_cpu / psutil.cpu_count()
+            self.cpu_usage_samples.append(normalized_cpu)
+            
+            # Get initial memory usage
+            initial_memory = process.memory_info().rss / (1024 * 1024)
+            self.memory_usage_samples.append(initial_memory)
+            
+            logger.info(f"Initialized monitoring - Initial CPU: {normalized_cpu:.1f}%, Memory: {initial_memory:.1f}MB")
+        except Exception as e:
+            logger.error(f"Error initializing metrics: {e}")
+            self.cpu_usage_samples.append(0.0)
+            self.memory_usage_samples.append(0.0)
+        
     def record_detection(self, confidence: float, detection_time: float, energy_level: float = None):
         """Record a wake word detection event"""
         event = DetectionEvent(
@@ -73,8 +91,8 @@ class PerformanceMonitor:
             # Get current process
             process = psutil.Process()
             
-            # Get CPU usage with longer interval for accuracy
-            cpu_percent = process.cpu_percent(interval=1.0)
+            # Get CPU usage with shorter interval for accuracy
+            cpu_percent = process.cpu_percent(interval=0.1)  # Reduced from 1.0
             
             # Normalize by CPU count and add to samples
             normalized_cpu = cpu_percent / psutil.cpu_count()
@@ -84,14 +102,14 @@ class PerformanceMonitor:
             memory_mb = process.memory_info().rss / (1024 * 1024)
             self.memory_usage_samples.append(memory_mb)
             
-            # Keep only last hour of samples (3600 samples at 1 per second)
-            max_samples = 3600
+            # Keep only last 10 minutes of samples (600 samples at 1 per second)
+            max_samples = 600  # Reduced from 3600
             if len(self.cpu_usage_samples) > max_samples:
                 self.cpu_usage_samples = self.cpu_usage_samples[-max_samples:]
             if len(self.memory_usage_samples) > max_samples:
                 self.memory_usage_samples = self.memory_usage_samples[-max_samples:]
             
-            logger.debug(f"Recorded system metrics - CPU: {normalized_cpu:.1f}%, Memory: {memory_mb:.1f}MB")
+            logger.info(f"System metrics - CPU: {normalized_cpu:.1f}%, Memory: {memory_mb:.1f}MB")
             
         except Exception as e:
             logger.error(f"Error recording system metrics: {e}")

@@ -41,8 +41,8 @@ WAKE_WORD_CONFIG = {
 # Performance monitoring settings
 MONITORING_CONFIG = {
     "metrics_dir": METRICS_DIR,
-    "log_interval": 60,  # Seconds between metrics logging
-    "save_interval": 300,  # Seconds between metrics saving
+    "log_interval": 1,  # Seconds between metrics logging (reduced from 60)
+    "save_interval": 60,  # Seconds between metrics saving (reduced from 300)
     "max_detection_history": 1000,  # Maximum number of detection events to keep
 }
 

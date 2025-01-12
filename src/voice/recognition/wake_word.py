@@ -85,6 +85,8 @@ class WakeWordDetector:
         
         # Initialize performance monitoring
         self.monitor = PerformanceMonitor()
+        self.last_metrics_time = time.time()
+        self.metrics_interval = 1.0  # Record metrics every second
         
         # Start periodic metrics logging
         self.metrics_thread = threading.Thread(target=self._log_metrics_periodically)
@@ -180,6 +182,8 @@ class WakeWordDetector:
         logger.info("Press Ctrl+C to stop")
         logger.info("==================================================\n")
         
+        self.monitor.start_time = time.time()  # Reset monitor start time
+        
     def _process_audio_stream(self):
         """Process audio stream for wake word detection"""
         while self.is_running:
@@ -233,6 +237,13 @@ class WakeWordDetector:
                 # Power saving: Sleep between processing
                 time.sleep(self.processing_interval)
                 
+                # Record and save metrics periodically
+                current_time = time.time()
+                if current_time - self.last_metrics_time >= self.metrics_interval:
+                    self.monitor.record_system_metrics()
+                    self.monitor.save_metrics()  # Save metrics to file
+                    self.last_metrics_time = current_time
+                
             except queue.Empty:
                 continue
             except Exception as e:
@@ -264,30 +275,29 @@ class WakeWordDetector:
 
     def stop(self):
         """Stop wake word detection"""
-        self.is_running = False
-        if self.stream:
-            try:
-                self.stream.stop_stream()
-                self.stream.close()
-            except Exception as e:
-                logger.error(f"Error stopping audio stream: {e}")
-        
-        try:
-            self.audio.terminate()
-        except Exception as e:
-            logger.error(f"Error terminating audio: {e}")
+        if not self.is_running:
+            return
             
-        # Log final accuracy metrics
-        metrics = self.monitor.get_current_metrics()
-        if 'accuracy' in metrics:
-            logger.info("\n=== Final Accuracy Metrics ===")
-            logger.info(f"Total Detections: {metrics['detections']['total']}")
-            logger.info(f"True Positives: {metrics['detections']['true_positives']}")
-            logger.info(f"False Positives: {metrics['detections']['false_positives']}")
-            logger.info(f"Accuracy: {metrics['accuracy']['value']:.1%}")
+        self.is_running = False
         
         # Save final metrics
-        self.monitor.save_metrics()
+        if hasattr(self, 'monitor'):
+            self.monitor.save_metrics()
+            
+        # Clean up resources
+        if self.stream:
+            self.stream.stop_stream()
+            self.stream.close()
+            
+        # Clear buffers
+        while not self.audio_buffer.empty():
+            try:
+                self.audio_buffer.get_nowait()
+            except queue.Empty:
+                break
+                
+        self.accumulated_audio.clear()
+        self.processing_batch.clear()
         
         logger.info("Wake word detector stopped")
 
@@ -391,16 +401,16 @@ class WakeWordDetector:
             return None
 
     def _log_metrics_periodically(self):
-        """Log metrics periodically"""
+        """Log metrics periodically in a separate thread"""
         while self.is_running:
             try:
-                # Record system metrics less frequently
-                self.monitor.record_system_metrics()
-                time.sleep(60)  # Increased from 30s to 60s
-                
+                time.sleep(60)  # Log every minute
+                if self.is_running:
+                    self.monitor.log_current_metrics()
+                    self.monitor.save_metrics()  # Save metrics to file
             except Exception as e:
                 logger.error(f"Error logging metrics: {e}")
-                time.sleep(60)
+                continue
 
     def is_active(self) -> bool:
         """Check if wake word detector is active"""
