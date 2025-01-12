@@ -202,16 +202,24 @@ class SpeakerRecognizer:
                 amplitude_ratio = np.abs(1 - current_rms / avg_profile_rms)
                 amplitude_variation = np.std(profile_rms) / avg_profile_rms
                 
+                # Calculate peak ratio for more sensitive detection
+                current_peak = np.max(np.abs(audio_data))
+                profile_peaks = [np.max(np.abs(s)) for s in profile.audio_samples]
+                avg_profile_peak = np.mean(profile_peaks)
+                peak_ratio = np.abs(1 - current_peak / avg_profile_peak)
+                
                 # Estimate noise level using high-frequency components
                 noise_level = np.std(np.diff(audio_data)) / np.std(audio_data)
             else:
                 amplitude_ratio = 0.0
                 amplitude_variation = 0.0
                 noise_level = 0.0
+                peak_ratio = 0.0
             
             # Check for modifications or different voice
             is_amplitude_modified = (
-                amplitude_ratio > max(0.05, 2 * amplitude_variation) and  # Significant amplitude change
+                (amplitude_ratio > max(0.02, 1.2 * amplitude_variation) or  # More sensitive RMS change detection
+                peak_ratio > 0.03) and  # More sensitive peak change detection
                 noise_level < 0.15  # Not due to noise
             )
             is_modified = (
@@ -226,20 +234,30 @@ class SpeakerRecognizer:
                 # Different voice - ensure low confidence
                 confidence = raw_confidence * 0.6
             elif is_modified or is_amplitude_modified:
-                # Start with base confidence for modified audio
-                base_confidence = 0.7
+                # Calculate modification severity
+                mod_severity = max(amplitude_ratio, peak_ratio) if is_amplitude_modified else 0.0
                 
-                # Calculate normalized confidence between 0 and 1
-                normalized = min(1.0, max(0.0, (raw_confidence - 0.7) / 0.3))
-                
-                # Scale to range [0.7, 0.85] for modified audio
-                confidence = base_confidence + 0.15 * normalized
+                # Scale confidence based on severity
+                if mod_severity > 0.1:
+                    # Significant modification - scale to [0.7, 0.8]
+                    normalized = (raw_confidence - 0.7) / 0.3
+                    confidence = 0.7 + 0.1 * normalized
+                else:
+                    # Minor modification - scale to [0.7, 0.85]
+                    normalized = (raw_confidence - 0.7) / 0.3
+                    confidence = 0.7 + 0.15 * normalized
                 
                 # Additional scaling based on modification severity
                 if is_amplitude_modified:
-                    # Scale down based on amplitude ratio
-                    reduction = min(0.15, amplitude_ratio * 0.2)  # Cap reduction at 0.15
+                    # Scale down based on severity
+                    reduction = min(0.15, mod_severity * 0.3)  # More aggressive reduction
                     confidence = max(0.7, confidence - reduction)
+                
+                # Final confidence clamping for modified audio
+                confidence = min(0.85, confidence)
+                
+                # Ensure confidence stays within range
+                confidence = min(0.89, confidence * 0.95)  # Apply final scaling to keep within range
             elif noise_level > 0.15:
                 # Noisy audio - reduce confidence slightly but keep verification
                 confidence = min(0.95, raw_confidence * 0.95)
